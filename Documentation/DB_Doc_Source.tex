@@ -1,0 +1,165 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[polish]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{amsmath}
+\geometry{margin=1in}
+
+\title{\textbf{Dokumentacja Projektu}}
+\author{Ksawery Józefowski}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Spis użytych technologii}
+W projekcie wykorzystano następujące technologie:
+\begin{itemize}
+    \item \textbf{Python} – do implementacji skryptów generujących dane i komunikacji z bazą danych.
+    \item \textbf{MySQL} – system zarządzania relacyjną bazą danych.
+    \item \textbf{mysql.connector} - biblioteka Pythona do integracji z bazą danych. 
+    \item \textbf{Faker} – biblioteka Pythona do generowania danych testowych.
+    \item \textbf{Unidecode} – biblioteka Pythona do obsługi znaków.
+    \item \textbf{DBI} - pakiet pomagający połączyć R z systemami zarządzania bazami danych.
+    \item \textbf{RMySQL} - pakiet do integracji R z MySQL.
+    \item \textbf{knitR} - pakiet R do generowania Raportów.
+    \item \textbf{RMarkdown} – do analizy danych i generowania raportów.
+    \item \textbf{DrawSQL} - do wizualizacji schematu bazy danych.
+    \item \textbf{Overleaf} - do tworzenia dokumentacji w LaTeX.
+\end{itemize}
+
+\section{Lista plików i opis ich zawartości}
+\begin{itemize}
+    \item \texttt{main.py} – skrypt w języku Python, odpowiedzialny za generowanie danych testowych i wypełnianie bazy danych.
+    \item \texttt{schemat.sql} – plik SQL definiujący strukturę bazy danych.
+    \item \texttt{Raport\_Projekt.rmd} – kod źródłowy raportu analitycznego w formacie RMarkdown.
+    \item \texttt{Raport\_Projekt.pdf} – wygenerowany raport w formacie PDF.
+    \item \texttt{Dokumentacja.tex} – kod źródłowy dokumentacji w LaTeX.
+    \item \texttt{Dokumentacja.pdf} – wygenerowana dokumentacja w formacie PDF.
+    \item \texttt{schematbazy.png} - obraz wykorzystywany przez dokumentację.
+\end{itemize}
+
+\section{Kolejność i sposób uruchamiania plików}
+\begin{enumerate}
+    \item Uruchomienie pliku \texttt{schemat.sql} w celu utworzenia struktury bazy danych.
+    \item Wykonanie skryptu \texttt{main.py}, który wypełnia bazę danych danymi testowymi.
+    \item Analiza danych za pomocą kodu w \texttt{Raport\_Projekt.rmd} i wygenerowanie raportu PDF.
+\end{enumerate}
+
+\section{Schemat projektu bazy danych}
+\includegraphics[width=\textwidth]{schematbazy.png}
+
+\newpage
+
+\section{Lista zależności funkcyjnych z wyjaśnieniem}
+\subsection{Pracownicy}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{PracownikID} $\rightarrow$ \{Imie, Nazwisko, Stanowisko, DataZatrudnienia, Telefon, Email, Wynagrodzenie\}
+    \item Wyjaśnienie: \\
+    \texttt{PracownikID} jest kluczem głównym i identyfikuje każdego pracownika.
+\end{itemize}
+
+\subsection{Rodzaje Wycieczek}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{RodzajID} $\rightarrow$ \{Nazwa, Opis\}
+    \item Wyjaśnienie: \\
+    \texttt{RodzajID} jest kluczem głównym tabeli i identyfikuje każdy rodzaj wycieczki.
+\end{itemize}
+
+\subsection{Kierunki Wycieczek}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{KierunekID} $\rightarrow$ \{Lokalizacja, Opis\}
+    \item Wyjaśnienie: \\
+    \texttt{KierunekID}  jest kluczem głównym i identyfikuje lokalizacje i opis kierunku wycieczki.
+\end{itemize}
+
+\subsection{Wycieczki}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{WycieczkaID} $\rightarrow$ \{RodzajID, KierunekID, Cena, Koszt\} \newline
+    \texttt{RodzajID} $\rightarrow$ \{Nazwa, Opis\} \textit{(poprzez klucz obcy)} \newline
+    \texttt{KierunekID} $\rightarrow$ \{Lokalizacja, Opis\} \textit{(poprzez klucz obcy)}
+    \item Wyjaśnienie: \\
+    \texttt{WycieczkaID} jest kluczem głównym i identyfikuje atrybuty związane z danymi wycieczkami.
+\end{itemize}
+
+\subsection{Klienci}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{KlientID} $\rightarrow$ \{Imie, Nazwisko, Telefon, Email, Ulica, Miasto, KontaktAlarmowyImie, KontaktAlarmowyTelefon, KontaktAlarmowyEmail\}
+    \item Wyjaśnienie: \\
+    \texttt{KlientID} jest kluczem głównym i identyfikuje każdego klienta.
+\end{itemize}
+
+\subsection{Udziały Wyjazdów}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{ID} $\rightarrow$ \{WycieczkaID, KlientID\} \newline
+    \texttt{WycieczkaID} $\rightarrow$ \{RodzajID, KierunekID, Cena, Koszt\} \textit{(poprzez klucz obcy)} \newline
+    \texttt{KlientID} $\rightarrow$ \{Imie, Nazwisko, Telefon, Email, Ulica, Miasto, KontaktAlarmowyImie, KontaktAlarmowyTelefon, KontaktAlarmowyEmail\} \textit{(poprzez klucz obcy)}
+    \item Wyjaśnienie: \\
+    \texttt{ID} jest kluczem głównym i identyfikuje identyfikatory wycieczki i klienta biorącego w niej udział.
+\end{itemize}
+
+\subsection{Zrealizowane Wyjazdy}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{WyjazdID} $\rightarrow$ \{WycieczkaID, DataWyjazdu, DataPowrotu, PracownikID\}
+    \newline
+    \texttt{WycieczkaID} $\rightarrow$ \{RodzajID, KierunekID, Cena, Koszt\} \textit{(poprzez klucz obcy)} \newline
+    \texttt{PracownikID} $\rightarrow$ \{Imie, Nazwisko, Stanowisko, DataZatrudnienia, Telefon, Email, Wynagrodzenie\} \textit{(poprzez klucz obcy)}
+    \item Wyjaśnienie: \\
+    \texttt{WyjazdID} jest kluczem głównym i identyfikuje szczegóły zrealizowanego wyjazdu.
+\end{itemize}
+
+\subsection{Wypłaty Pracowników}
+\begin{itemize}
+    \item Zależności funkcyjne: \\
+    \texttt{WyplataID} $\rightarrow$ \{PracownikID, Kwota, DataWyplaty\} \newline
+    \texttt{PracownikID} $\rightarrow$ \{Imie, Nazwisko, Stanowisko, DataZatrudnienia, Telefon, Email, Wynagrodzenie\} \textit{(poprzez klucz obcy)}
+    \item Wyjaśnienie: \\
+    \texttt{WyplataID} jest kluczem głównym i identyfikuje szczegóły wypłaty dla pracownika.
+\end{itemize}
+
+\newpage
+\section{Uzasadnienie, że baza danych jest w postaci \textit{EKNF}}
+
+\subsection{Analiza relacji}
+\begin{itemize}
+    \item Wszystkie relacje są w \textit{3NF}.
+    \begin{itemize}
+        \item Wszystkie atrybuty są w pełni zależne od klucza głównego. Nie występują częściowe zależności funkcyjne, ponieważ każda relacja posiada jednoznaczny klucz główny, który determinuje wszystkie pozostałe atrybuty.
+        \item Nie występują tranzytywne zależności między atrybutami niekluczowymi. Jeśli istnieją powiązania między tabelami, są one reprezentowane przez klucze obce, które jednoznacznie wskazują odpowiednie dane w innych relacjach.
+    \end{itemize}
+    \item W każdej relacji każda zależność funkcyjna $X \rightarrow Y$ jest spełniona przez nadklucz:
+    \begin{itemize}
+        \item Zale\dot{z}no\'sci funkcyjne w każdej relacji odwołują się do kluczy głównych lub kluczy obcych, które jednoznacznie identyfikują wszystkie atrybuty.
+        \item Nie istnieją żadne atrybuty zależne od części klucza głównego.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Wniosek}
+Baza danych spełnia wymagania postaci normalnej (\textit{EKNF}), ponieważ każda relacja:
+\begin{itemize}
+    \item Nie zawiera częściowych zależności funkcyjnych.
+    \item Każda zależność funkcyjna $X \rightarrow Y$ jest spełniona przez nadklucz.
+\end{itemize}
+
+
+\section{Najtrudniejsze elementy projektu}
+\begin{itemize}
+    \item Zachowanie poprawności wszystkich wprowadzanych danych.
+    \item Zapewnienie unikalności danych takich jak e-maile i numery telefonów.
+    \item Utrzymanie spójności bazy danych przy złożonych zależnościach.
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,298 @@
+---
+title: "Raport na projekt"
+author: "Paweł Domański, Maciej Dalkowski"
+date: "2025-01-19"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE)
+library(DBI)
+library(RMySQL)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(knitr)
+library(kableExtra)
+
+# Dane do połączenia.
+connection <- dbConnect(MySQL(),
+                        dbname = 'team25',
+                        host = 'giniewicz.it',
+                        user = 'team25',
+                        password = 'te@mzazs')
+
+rodzaje_wycieczek <- dbReadTable(connection, "RodzajeWycieczek")
+udzialy_wyjazdow <- dbReadTable(connection, "UdzialyWyjazdow")
+wycieczki <- dbReadTable(connection, "Wycieczki")
+zrealizowane_wyjazdy <- dbReadTable(connection, "ZrealizowaneWyjazdy")
+pracownicy <- dbReadTable(connection, "Pracownicy")
+klienci <- dbReadTable(connection, "Klienci")
+kierunki_wycieczek <- dbReadTable(connection, "KierunkiWycieczek")
+wyplaty_pracownikow <- dbReadTable(connection, "WyplatyPracownikow")
+```
+
+# Znajdź najpopularniejsze rodzaje wycieczek, porównaj koszta i zyski, czy są opłacalne?
+
+```{r Analiza popularności wycieczek - punkt 1 z części 3}
+popularnosc <- udzialy_wyjazdow %>%
+  group_by(WycieczkaID) %>%
+  summarise(LiczbaKlientow = n()) %>%
+  inner_join(wycieczki, by = "WycieczkaID") %>%
+  group_by(RodzajID) %>%
+  summarise(LiczbaKlientow = sum(LiczbaKlientow),
+            Koszty = sum(Koszt),
+            Przychody = sum(Cena * LiczbaKlientow),
+            Zysk = Przychody - Koszty) %>%
+  inner_join(rodzaje_wycieczek, by = "RodzajID") %>%
+  arrange(desc(LiczbaKlientow))
+
+ggplot(popularnosc, aes(x = reorder(Nazwa, Zysk), y = Zysk, fill = Zysk)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = round(Zysk, 0)), vjust = -0.5, color = "black", size = 3) +
+  labs(title = "Najbardziej zyskowne rodzaje wycieczek",
+       x = "Rodzaj wycieczki",
+       y = "Zysk (zł)",
+       caption = 'Wykres 1') +
+  theme_minimal() +
+  scale_fill_gradient(low = "red", high = "green") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+najbardziej_zyskowny_rodzaj_wycieczek.id <- which(popularnosc$Zysk == max(popularnosc$Zysk))
+najmniej_zyskowny_rodzaj_wycieczek.id <- which(popularnosc$Zysk == min(popularnosc$Zysk))
+```
+Z analizy wynika, że najbardziej zyskowne są wycieczki typu `r popularnosc[najbardziej_zyskowny_rodzaj_wycieczek.id,"Nazwa"]`, generujące największy zysk w porównaniu do innych rodzajów wycieczek. Wycieczki te osiągnęły około `r round(popularnosc[najbardziej_zyskowny_rodzaj_wycieczek.id,"Zysk"], -2)` zł zysku, co czyni je liderem w tym zestawieniu. Wycieczki typu `r popularnosc[najmniej_zyskowny_rodzaj_wycieczek.id,"Nazwa"]` charakteryzują się najniższym zyskiem, co może sugerować ich mniejszą opłacalność w stosunku do pozostałych rodzajów.
+
+# Sporządź wykres liczby obsłużonych klientów w każdym miesiącu działalności firmy, czy firma rośnie, czy podupada?
+
+```{r Analiza liczby klientów - punkt 2 z części 3}
+klienci_miesiac <- udzialy_wyjazdow %>%
+  inner_join(zrealizowane_wyjazdy, by = "WycieczkaID", relationship = "many-to-many") %>%
+  mutate(Miesiac = format(as.Date(DataWyjazdu), "%Y-%m")) %>%
+  group_by(Miesiac) %>%
+  summarise(LiczbaKlientow = n(), .groups = "drop") %>%
+  arrange(Miesiac) %>%
+  # Uzupełnienie brakujących miesięcy wartością 0
+  complete(
+    Miesiac = seq.Date(
+      from = as.Date(paste0(min(Miesiac), "-01")), 
+      to = as.Date(paste0(max(Miesiac), "-01")), 
+      by = "month"
+    ) %>% format("%Y-%m"),
+    fill = list(LiczbaKlientow = 0)
+  )
+
+ggplot(klienci_miesiac, aes(x = Miesiac, y = LiczbaKlientow, group = 1)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_point(color = "darkblue", size = 3) +
+  labs(title = "Liczba obsłużonych klientów w każdym miesiącu",
+       x = "Miesiąc",
+       y = "Liczba klientów",
+       caption = 'Wykres 2') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+**Wnioski**
+
+1. **Szczyty obsługi klientów:** Najwyższa liczba klientów została obsłużona w czerwcu 2024 roku, co może być związane z sezonem letnim i zwiększonym zainteresowaniem wyjazdami w okresie wakacyjnym. Kolejny wyraźny wzrost widoczny jest w grudniu 2024 roku, co może wskazywać na popularność wycieczek w okresie świątecznym.
+
+2. **Miesiące o niskim zainteresowaniu:** W lipcu, wrześniu i listopadzie 2024 roku liczba obsłużonych klientów wynosiła 0, co wyraźnie wskazuje na okresy o wyjątkowo niskim popycie. Możliwe powiązanie ze słabymi warunkami pogodowymi lub brakiem oferty dopasowanej do takich warunków.
+
+3. **Sezonowość:** Dane ponownie potwierdzają sezonowy charakter działalności firmy, gdzie popularność wycieczek wyraźnie rośnie w określonych miesiącach, takich jak czerwiec i grudzień.
+
+
+Firma osiąga sukces w kluczowych miesiącach, takich jak czerwiec i październik, ale brak stabilności w działalności w pozostałych okresach może ograniczać jej rozwój. Istnieje potrzeba analizy przyczyn niskiego zainteresowania w miesiącach takich jak lipiec, wrzesień i listopad.
+Warto rozważyć wprowadzenie nowych strategii marketingowych, promocji oraz dostosowania oferty do potencjalnych potrzeb klientów w mniej popularnych miesiącach.
+Może to znacząco poprawić stabilność finansową firmy.
+
+\pagebreak
+
+# Sprawdź, po których wycieczkach klienci wracają na kolejne, a po których mają dość i więcej ich nie widzicie. Czy są takie, które być może powinny zniknąć z oferty?
+
+```{r Analiza najgorszych wycieczek - punkt 3 z części 3}
+
+klienci_wycieczki <- udzialy_wyjazdow %>%
+  group_by(KlientID) %>%
+  summarise(LiczbaWycieczek = n())
+
+klienci_wycieczki <- subset(klienci_wycieczki, LiczbaWycieczek==1)
+
+klienci_wycieczki <- klienci_wycieczki %>%
+  inner_join(udzialy_wyjazdow, by = "KlientID") %>%
+  group_by(WycieczkaID) %>%
+  summarise(LiczbaJednorazowychKlientow = n()) %>%
+  arrange(-LiczbaJednorazowychKlientow) %>%
+  inner_join(wycieczki, by = "WycieczkaID") %>%
+  inner_join(rodzaje_wycieczek, by = "RodzajID") %>%
+  inner_join(kierunki_wycieczek, by = "KierunekID") 
+
+klienci_wycieczki <- klienci_wycieczki[, c("WycieczkaID", "LiczbaJednorazowychKlientow", "Nazwa", "Lokalizacja")]
+
+klienci_wycieczki %>% 
+  kable("latex", booktabs = TRUE, caption = "Tabela najmniej udanych wycieczek") %>%
+  kable_styling(latex_options = c("striped", "hold_position"))
+```
+
+Najmniej udane wycieczki mają ID: `r klienci_wycieczki$WycieczkaID[1:3]`. Są to koncert w Gdańsku, survival we Wrocławiu oraz koncert w Krakowie. Liczba jednorazowych klientów wyniosła w tych wyczieczkach 3 i po 2 osoby. Razem jest to aż `r sum(klienci_wycieczki$LiczbaJednorazowychKlientow[1:3]/nrow(klienci)*100)`% wszystkich klientów firmy. Z innych wycieczek klienci byli zadowoleni, tylko jedna lub żadna osoba na podróż nie skorzystała ponownie z usług firmy. Należy się zastanowić, czy Gdańsk i Kraków jest odpowiednim miastem na muzyczne występy, a Wrocław na wyzwania survivalowe.
+
+\pagebreak
+
+# Jaka jest korelacja pomiędzy wynagrodzeniem pracowników a liczbą zrealizowanych przez nich wycieczek i wygenerowanym przez nich zyskiem? 
+
+```{r Analiza zależności między wynagrodzeniami pracowników a ich wydajnością - ilość/pensja}
+wydajnosc_pracownikow <- zrealizowane_wyjazdy %>%
+  group_by(PracownikID) %>%
+  summarise(LiczbaWycieczek = n())
+
+analiza_pracownikow <- wydajnosc_pracownikow %>%
+  inner_join(pracownicy, by = "PracownikID")
+
+korelacja_ilosc_pensja <- cor(analiza_pracownikow$Wynagrodzenie, analiza_pracownikow$LiczbaWycieczek)
+
+ggplot(analiza_pracownikow, aes(x = Wynagrodzenie, y = LiczbaWycieczek)) +
+  geom_point(color = "blue", size = 3) +
+  geom_smooth(method = "lm",color = "red", se = FALSE) +
+  labs(title = "Zależność między wynagrodzeniem a liczbą obsłużonych wycieczek",
+       x = "Wynagrodzenie (PLN)",
+       y = "Liczba obsłużonych wycieczek",
+       caption = 'Wykres 3') +
+  theme_minimal()
+```
+Korelacja pomiędzy wynagrodzeniem pracowników a ilością sprzedanych przez nich wycieczek jest bardzo niska i wynosi $\approx$ `r round(korelacja_ilosc_pensja,2)` co oznacza, że pracownicy w naszej firmie nie są wynagradzani sprawiedliwie względem nakładu pracy przez nich włożoną.
+
+
+```{r Analiza zależności między wynagrodzeniami pracowników a ich wydajnością - zysk/pensja}
+zyski_wycieczek <- zrealizowane_wyjazdy %>%
+  inner_join(wycieczki, by = "WycieczkaID") %>%
+  mutate(ZyskWycieczki = Cena - Koszt)
+
+zyski_pracownicy <- zyski_wycieczek %>%
+  group_by(PracownikID) %>%
+  summarise(
+    SumaZysku = sum(ZyskWycieczki, na.rm = TRUE),
+    LiczbaWycieczek = n()
+  ) %>%
+  inner_join(pracownicy, by = "PracownikID") 
+
+korelacja_zysk_pensja <- cor(analiza_pracownikow$Wynagrodzenie, zyski_pracownicy$SumaZysku)
+
+ggplot(zyski_pracownicy, aes(x = Wynagrodzenie, y = SumaZysku)) +
+  geom_point(color = "blue", size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  labs(
+    title = "Korelacja między wynagrodzeniem a zyskiem z wycieczek",
+    x = "Wynagrodzenie (zł)",
+    y = "Suma zysku z wycieczek (zł)",
+    caption = "Wykres 4"
+  ) +
+  theme_minimal()
+```
+Przekłada się to także na dość niską korelację pomiędzy zyskami generowanymi przez poszczgólnych pracowników a ich wynagrodzeniami, wynoszącą $\approx$ `r round(korelacja_zysk_pensja,2)`, co tylko potwierdza, że należy ponownie rozważyć stawki pracowników i/lub zakres ich obowiązków.
+
+
+# Z jakich miast mamy najwięcej zorganizowanych wycieczek z podziałem na klientów jednorazowych i powracających?
+
+```{r Z jakich miast mamy najwięcej zorganizowanych wycieczek}
+klienci_wycieczki <- udzialy_wyjazdow %>%
+  group_by(KlientID) %>%
+  summarise(LiczbaWycieczek = n())
+
+klienci_wycieczki <- klienci_wycieczki %>%
+  mutate(StatusKlienta = ifelse(LiczbaWycieczek > 1, "Powracający", "Jednorazowy"))
+
+klienci_analiza <- klienci %>%
+  inner_join(klienci_wycieczki, by = "KlientID")
+
+
+charakterystyka_klientow <- klienci_analiza %>%
+  group_by(StatusKlienta, Miasto) %>%
+  summarise(LiczbaKlientow = n(), .groups = "drop")
+
+
+ggplot(klienci_analiza, aes(x = Miasto, y = LiczbaWycieczek, fill = StatusKlienta)) +
+  geom_bar(stat = 'identity') +
+  labs(title = "Miasta naszych klientów",
+       x = "Miasto",
+       y = "Liczba wycieczek",
+       caption = 'Wykres 5') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+ile_klientow_powracajacych <- length(klienci_analiza[which(klienci_analiza$StatusKlienta == 'Powracający'),"LiczbaWycieczek"])
+ile_klientow_jednorazowych <- length(klienci_analiza[which(klienci_analiza$StatusKlienta == 'Jednorazowy'),"LiczbaWycieczek"])
+
+ile_wycieczek_powracajacych <- sum(klienci_analiza[which(klienci_analiza$StatusKlienta == 'Powracający'),"LiczbaWycieczek"])-ile_klientow_powracajacych
+ile_wycieczek_jednorazowych <- sum(klienci_analiza[which(klienci_analiza$StatusKlienta == 'Jednorazowy'),"LiczbaWycieczek"])+ile_klientow_powracajacych
+ile_wycieczek <- sum(klienci_analiza$LiczbaWycieczek)
+```
+
+Większość wycieczek organizowanych przez naszą firmę jest dla nowych klientów (aż `r round(100*ile_wycieczek_jednorazowych/ile_wycieczek,2)`% wszystkich wycieczek). Wśród nich `r ile_klientow_powracajacych` osób zdecydowało się powrócić, na łącznie `r ile_wycieczek_powracajacych` wycieczek. Powracający klienci to mieszkańcy: `r klienci_analiza[which(klienci_analiza$StatusKlienta == 'Powracający'),"Miasto"]`. Natomiast łacznie `r ile_klientow_jednorazowych` osób nie powróciło już do naszej firmy. Są to mieszkańcy: `r klienci_analiza[which(klienci_analiza$StatusKlienta == 'Jednorazowy'),"Miasto"]`. Może to sugerować różnice w jakości usług świadczonych przez lokalne placówki firmy, lub skuteczności kampanii marketingowych w poszczególnych miastach.
+
+
+# Jakie miasta są najbardziej dochodowe?
+
+```{r Jakie miasta są najbardziej dochodowe}
+miasta <- wycieczki %>%
+  inner_join(kierunki_wycieczek, by = "KierunekID") %>%
+  inner_join(udzialy_wyjazdow, by = "WycieczkaID") %>%
+  group_by(Lokalizacja, Cena, Koszt, WycieczkaID) %>%
+  summarise(LiczbaKlientow = n()) %>%
+  mutate(Zysk = Cena*LiczbaKlientow - Koszt) %>%
+  group_by(Lokalizacja) %>%
+  summarise(ZyskCalkowity = sum(Zysk)) %>%
+  arrange(desc(ZyskCalkowity)) %>%
+  mutate(Lokalizacja = factor(Lokalizacja, levels = Lokalizacja))
+
+ggplot(miasta, mapping = aes(x=Lokalizacja, y=ZyskCalkowity, fill = Lokalizacja)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Zysk dla miast", x = "Miasta", y = "Zysk całkowity",
+       caption = "Wykres 6") +
+  theme_minimal()
+```
+
+Na wykresie można zauważyć, że `r miasta$Lokalizacja[1]` jest najbardziej dochodowym miastem, a zysk w czasie funkcjonowania firmy w tym mieście wyniósł `r miasta[1,2]` zł, co stanowi `r round(miasta[1,2]/sum(miasta[,2])*100, 2)`% całkowitego zysku ze wszystkich miast. Na podium mamy również miasta: `r miasta$Lokalizacja[c(2,3)]`, z zyskami odpowiednio: `r miasta[2,2]` zł i `r miasta[3,2]` zł. Najmniej dochodowym miastem jest `r last(miasta$Lokalizacja)`.
+
+# Jak zmienia się średnia cena wycieczki w czasie?
+
+```{r}
+srednia_cen <- wycieczki %>%
+  inner_join(rodzaje_wycieczek, by="RodzajID") %>%
+  left_join(zrealizowane_wyjazdy, by="WycieczkaID")
+  
+srednia_cen <- subset(srednia_cen, !is.na(DataWyjazdu))
+srednia_cen$DataWyjazdu <- as.Date(srednia_cen$DataWyjazdu)
+
+srednia_cen_2 <- srednia_cen %>% 
+  mutate(Miesiac = format(as.Date(DataWyjazdu), "%Y-%m")) %>%
+  group_by(Miesiac) %>%
+  summarise(SredniaCena = mean(Cena)) %>%
+  mutate(Legenda = "Średnia Cena")
+
+full_months <- seq(from = as.Date("2024-01-01"), to = as.Date("2025-01-01"), by = "month")
+
+srednia_cen_2$Legenda <- factor(srednia_cen_2$Legenda, levels = c("Wycieczka", "Średnia Cena"))
+
+ggplot() +
+  
+  geom_line(srednia_cen, mapping = aes(DataWyjazdu, Cena, colour = Nazwa), linewidth=1) +
+  
+  geom_point(srednia_cen, mapping = aes(DataWyjazdu, Cena, colour = Nazwa), size=3) +
+  
+  geom_line(data = srednia_cen_2, aes(x = as.Date(paste0(Miesiac, "-01")), y = SredniaCena, colour = Legenda), linewidth = 0.9, linetype = "longdash") +
+  
+  labs(title = "Ceny wycieczek w danych miesiącach", x = "Data wyjazdu", 
+       colour = "Legenda", caption = "Wykres 7") +
+  
+  scale_x_date(breaks = full_months, labels = format(full_months, "%b %Y")) +
+  
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Średnia cena wycieczek w poszczególnych miesiącach waha się między `r min(srednia_cen_2$SredniaCena)` a `r max(srednia_cen_2$SredniaCena)` zł. Wycieczki ekstremalne i survivalowe przyczyniają się do obniżenia średniej ceny, podczas gdy wieczory kawalerskie ją podwyższają. Jednak z uwagi na ograniczoną liczbę danych, nie możemy jeszcze stwierdzić, czy tendencja cenowa jest rosnąca, czy malejąca. Na wykresie brakuje wycieczek ze zwiedzaniem, ponieważ nie zrealizowano jeszcze żadnych takich podróży.
+
