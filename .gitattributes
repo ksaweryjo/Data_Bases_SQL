@@ -1,4 +1,5 @@
 *.Rmd linguist-language=R
 *.rmd linguist-language=R
+*.tex linguist-language=TeX
 *.png linguist-detectable=false
 *.pdf linguist-detectable=false
